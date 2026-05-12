@@ -1,0 +1,27 @@
+# Node.js
+node_modules/
+dist/
+.DS_Store
+
+# Java
+target/
+*.class
+.mvn/
+.settings/
+.project
+.classpath
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Misc
+.idea/
+.vscode/
+*.log
+maven.zip
+apache-maven-*/
+neuroscan_users.json
+neuroscan_session.json
