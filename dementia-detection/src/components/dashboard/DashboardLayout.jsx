@@ -1,6 +1,6 @@
 import BackgroundParticles from "./BackgroundParticles";
 
-const DashboardLayout = ({ children, theme }) => {
+const DashboardLayout = ({ children }) => {
   return (
     <div style={{ position: "relative", width: "100%", minHeight: "100vh" }}>
       {/* Background Particles Layer */}

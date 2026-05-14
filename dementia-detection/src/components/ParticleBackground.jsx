@@ -1,9 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import Particles from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
 
 const ParticleBackground = ({ theme = "dark" }) => {
-  const [init, setInit] = useState(false);
+  const [, setInit] = useState(false);
 
   const particlesInit = useCallback(async (engine) => {
     await loadSlim(engine);

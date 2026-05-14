@@ -12,7 +12,7 @@ if (-not (Test-Path "backend") -or -not (Test-Path "dementia-detection")) {
 
 # 1. Start Java Backend
 Write-Host "📦 Starting Java Backend (Port 8080)..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd backend; mvn spring-boot:run"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd backend; .\run_backend.ps1"
 
 # 2. Start Python Microservice
 Write-Host "🐍 Starting Python Microservice (Port 5000)..." -ForegroundColor Yellow

@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FiActivity, FiEye, FiX, FiFileText, FiDownload } from "react-icons/fi";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { FiEye, FiX, FiFileText, FiDownload } from "react-icons/fi";
 
 const patients = [
   {
@@ -70,7 +68,7 @@ const DoctorDashboard = () => {
       const result = await response.json();
       
       if (result.status === 'success' && result.download_url) {
-        window.location.href = result.download_url;
+        window.location.assign(result.download_url);
       } else {
         throw new Error("Failed to generate PDF on server.");
       }
@@ -90,6 +88,10 @@ const DoctorDashboard = () => {
           </p>
         </div>
         <motion.button className="btn-outline" whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}
+          onClick={() => {
+            const el = document.getElementById("speech-recorder-section");
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }}
           style={{ fontSize: "0.85rem", padding: "9px 22px" }}>
           + Add Patient
         </motion.button>

@@ -51,15 +51,22 @@ const LoginPage = ({ setUser }) => {
         
         const data = await response.json();
         if (response.ok && data.success) {
-          const userData = { email: data.user.email, displayName: data.user.name, id: data.user.id };
-          localStorage.setItem("neuroscan_session", JSON.stringify(userData));
-          setUser(userData);
-          navigate("/");
-          return;
+          if (activeTab === "register") {
+            alert("Registration successful! Please log in.");
+            setActiveTab("login");
+            setPassword("");
+            return;
+          } else {
+            const userData = { email: data.user.email, displayName: data.user.name, id: data.user.id };
+            localStorage.setItem("neuroscan_session", JSON.stringify(userData));
+            setUser(userData);
+            navigate("/");
+            return;
+          }
         }
         throw new Error(data.message || "Authentication failed");
         
-      } catch (backendErr) {
+      } catch (_backendErr) {
         // FALLBACK: Local Browser Database (If Java server is offline)
         console.warn("Java Backend offline. Switching to Local Secure Database...");
         
@@ -67,16 +74,15 @@ const LoginPage = ({ setUser }) => {
         
         if (activeTab === "register") {
           if (localDB.find(u => u.email === email)) {
-            throw new Error("This email is already registered in the local database.");
+            throw new Error("This email is already registered in the local database.", { cause: _backendErr });
           }
           const newUser = { id: Date.now(), name: name || "Medical Practitioner", email, password };
           localDB.push(newUser);
           localStorage.setItem("neuroscan_users", JSON.stringify(localDB));
           
-          const userData = { email: newUser.email, displayName: newUser.name, id: newUser.id };
-          localStorage.setItem("neuroscan_session", JSON.stringify(userData));
-          setUser(userData);
-          navigate("/");
+          alert("Registration successful! Please log in.");
+          setActiveTab("login");
+          setPassword("");
         } else {
           const user = localDB.find(u => u.email === email && u.password === password);
           if (user) {
@@ -85,7 +91,7 @@ const LoginPage = ({ setUser }) => {
             setUser(userData);
             navigate("/");
           } else {
-            throw new Error("Invalid email or password (Local Database). Please Register first.");
+            throw new Error("Invalid email or password (Local Database). Please Register first.", { cause: _backendErr });
           }
         }
       }
@@ -363,22 +369,11 @@ const LoginPage = ({ setUser }) => {
             height: "100%",
             border: "none",
             zIndex: 1,
-            pointerEvents: "none",
+            pointerEvents: "auto",
+            transform: "scale(1.15)",
+            transformOrigin: "center center",
           }}
           title="AI Brain 3D Animation"
-        />
-
-        {/* Cover to hide "Built with Spline" watermark */}
-        <div
-          style={{
-            position: "absolute",
-            bottom: 0,
-            right: 0,
-            width: "200px",
-            height: "50px",
-            background: "var(--bg-base)",
-            zIndex: 2,
-          }}
         />
       </motion.div>
     </div>

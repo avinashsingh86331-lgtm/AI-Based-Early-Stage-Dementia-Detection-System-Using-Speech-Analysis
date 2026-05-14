@@ -6,21 +6,28 @@ import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../firebase";
 
-const Navbar = ({ theme, setTheme, user, setUser, scrollToSection }) => {
+const Navbar = ({ theme, setTheme, user, setUser, scrollToSection, notifications = [], setNotifications, addNotification, showToast }) => {
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileData, setProfileData] = useState({
     name: user?.displayName || "Medical Practitioner",
     age: "",
+    specialty: "Neurologist",
+    clinic: "NeuroScan Clinic",
   });
   const dropdownRef = useRef(null);
+  const notifRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setProfileOpen(false);
         setEditMode(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotificationsOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -36,7 +43,9 @@ const Navbar = ({ theme, setTheme, user, setUser, scrollToSection }) => {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-    } catch (e) {}
+    } catch {
+      // Ignored
+    }
     localStorage.removeItem("neuroscan_session");
     setUser(null);
     setProfileOpen(false);
@@ -48,11 +57,25 @@ const Navbar = ({ theme, setTheme, user, setUser, scrollToSection }) => {
     if (setUser && user) {
       setUser({ ...user, displayName: profileData.name });
     }
+    if (addNotification) {
+      addNotification({ type: "success", title: "Profile Updated", message: "Your practitioner profile details have been saved successfully." });
+    }
+    if (showToast) {
+      showToast("Profile Updated Successfully", "success");
+    }
   };
 
   const handleNavClick = (section) => {
     if (scrollToSection) {
       scrollToSection(section);
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const markAllAsRead = () => {
+    if (setNotifications) {
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     }
   };
 
@@ -126,41 +149,131 @@ const Navbar = ({ theme, setTheme, user, setUser, scrollToSection }) => {
         </button>
 
         {/* Notification */}
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          style={{
-            background: "var(--bg-card)",
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "50%",
-            width: "40px",
-            height: "40px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#73C7E3",
-            cursor: "pointer",
-            position: "relative",
-          }}
-        >
-          <FiBell size={16} />
-          <span style={{
-            position: "absolute",
-            top: "8px",
-            right: "8px",
-            width: "8px",
-            height: "8px",
-            background: "var(--danger)",
-            borderRadius: "50%",
-          }} />
-        </motion.button>
+        <div ref={notifRef} style={{ position: "relative" }}>
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => { setNotificationsOpen((v) => !v); setProfileOpen(false); }}
+            style={{
+              background: "var(--bg-card)",
+              border: `1px solid ${notificationsOpen ? "#73C7E3" : "var(--border-subtle)"}`,
+              borderRadius: "50%",
+              width: "40px",
+              height: "40px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#73C7E3",
+              cursor: "pointer",
+              position: "relative",
+              transition: "border-color 0.2s ease",
+            }}
+          >
+            <FiBell size={16} />
+            {unreadCount > 0 && (
+              <span style={{
+                position: "absolute",
+                top: "8px",
+                right: "8px",
+                width: "8px",
+                height: "8px",
+                background: "var(--danger)",
+                borderRadius: "50%",
+              }} />
+            )}
+          </motion.button>
+
+          <AnimatePresence>
+            {notificationsOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                transition={{ duration: 0.2 }}
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 12px)",
+                  right: "-40px",
+                  width: "320px",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "var(--radius-lg)",
+                  boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+                  overflow: "hidden",
+                  zIndex: 999,
+                  backdropFilter: "blur(12px)",
+                }}
+              >
+                <div style={{
+                  padding: "16px 20px",
+                  borderBottom: "1px solid var(--border-subtle)",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center"
+                }}>
+                  <h3 style={{ margin: 0, fontSize: "1rem", color: "#73C7E3", fontWeight: "600" }}>Notifications</h3>
+                  {unreadCount > 0 && (
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", cursor: "pointer" }} onClick={markAllAsRead}>Mark all as read</span>
+                  )}
+                </div>
+                
+                <div style={{ padding: "8px", maxHeight: "300px", overflowY: "auto" }}>
+                  {notifications.length === 0 ? (
+                    <p style={{ textAlign: "center", fontSize: "0.85rem", color: "var(--text-muted)", padding: "16px 0" }}>No new notifications</p>
+                  ) : (
+                    notifications.map((notif) => (
+                      <div key={notif.id} style={{
+                        padding: "12px",
+                        borderRadius: "var(--radius-sm)",
+                        background: notif.read ? "transparent" : "var(--bg-surface)",
+                        marginBottom: "8px",
+                        borderLeft: `3px solid ${notif.type === "success" ? "#00c07f" : notif.type === "warning" ? "#e63946" : "#73C7E3"}`,
+                        border: notif.read ? "1px solid var(--border-subtle)" : undefined,
+                        cursor: "pointer",
+                      }}>
+                        <p style={{ margin: "0 0 4px 0", fontSize: "0.85rem", color: "var(--text-primary)", fontWeight: "500" }}>{notif.title}</p>
+                        <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--text-muted)" }}>{notif.message}</p>
+                        <span style={{ display: "block", marginTop: "6px", fontSize: "0.65rem", color: "var(--text-muted)" }}>{notif.time}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                
+                {notifications.length > 0 && (
+                  <div style={{
+                    padding: "12px",
+                    borderTop: "1px solid var(--border-subtle)",
+                    textAlign: "center"
+                  }}>
+                    <button 
+                      onClick={() => {
+                        if (showToast) showToast("All notifications have been viewed.", "info");
+                        markAllAsRead();
+                        setNotificationsOpen(false);
+                      }}
+                      style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "#73C7E3",
+                      fontSize: "0.85rem",
+                      cursor: "pointer",
+                      fontFamily: "var(--font-body)"
+                    }}>
+                      Clear All Notifications
+                    </button>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
         {/* User Avatar with Profile Dropdown */}
         {user ? (
           <div ref={dropdownRef} style={{ position: "relative" }}>
             <motion.div
               whileHover={{ scale: 1.05 }}
-              onClick={() => { setProfileOpen((v) => !v); setEditMode(false); }}
+              onClick={() => { setProfileOpen((v) => !v); setEditMode(false); setNotificationsOpen(false); }}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -245,6 +358,16 @@ const Navbar = ({ theme, setTheme, user, setUser, scrollToSection }) => {
                             Age: {profileData.age}
                           </p>
                         )}
+                        {profileData.specialty && (
+                          <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "2px" }}>
+                            Specialty: {profileData.specialty}
+                          </p>
+                        )}
+                        {profileData.clinic && (
+                          <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "2px" }}>
+                            Clinic: {profileData.clinic}
+                          </p>
+                        )}
                       </>
                     ) : (
                       <div style={{ textAlign: "left", display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}>
@@ -269,6 +392,36 @@ const Navbar = ({ theme, setTheme, user, setUser, scrollToSection }) => {
                             value={profileData.age}
                             onChange={(e) => setProfileData({ ...profileData, age: e.target.value })}
                             placeholder="e.g. 35"
+                            style={{
+                              width: "100%", padding: "10px 12px",
+                              background: "var(--bg-surface)", border: "1px solid var(--border-subtle)",
+                              borderRadius: "var(--radius-sm)", color: "var(--text-primary)",
+                              fontFamily: "var(--font-body)", fontSize: "0.9rem", outline: "none",
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.75rem", color: "#73C7E3", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Specialty</label>
+                          <input
+                            type="text"
+                            value={profileData.specialty}
+                            onChange={(e) => setProfileData({ ...profileData, specialty: e.target.value })}
+                            placeholder="e.g. Neurologist"
+                            style={{
+                              width: "100%", padding: "10px 12px",
+                              background: "var(--bg-surface)", border: "1px solid var(--border-subtle)",
+                              borderRadius: "var(--radius-sm)", color: "var(--text-primary)",
+                              fontFamily: "var(--font-body)", fontSize: "0.9rem", outline: "none",
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.75rem", color: "#73C7E3", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Clinic/Hospital</label>
+                          <input
+                            type="text"
+                            value={profileData.clinic}
+                            onChange={(e) => setProfileData({ ...profileData, clinic: e.target.value })}
+                            placeholder="e.g. NeuroScan Clinic"
                             style={{
                               width: "100%", padding: "10px 12px",
                               background: "var(--bg-surface)", border: "1px solid var(--border-subtle)",

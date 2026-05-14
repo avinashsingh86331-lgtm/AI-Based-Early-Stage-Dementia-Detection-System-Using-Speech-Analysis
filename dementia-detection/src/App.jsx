@@ -21,6 +21,7 @@ function App() {
   useEffect(() => {
     const localSession = localStorage.getItem("neuroscan_session");
     if (localSession) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUser(JSON.parse(localSession));
     }
   }, []);

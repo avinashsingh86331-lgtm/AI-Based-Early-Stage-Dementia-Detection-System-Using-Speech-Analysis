@@ -31,10 +31,7 @@ const CustomCursor = () => {
     };
     animId = requestAnimationFrame(animate);
 
-    // Hover effects on interactive elements
-    const interactiveEls = document.querySelectorAll(
-      'button, a, input, textarea, [role="button"], select, label'
-    );
+    // We use event delegation for dynamic elements
 
     const addHover = () => {
       dot.classList.add("hover");

@@ -1,26 +1,29 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
 import { FiMic, FiMicOff, FiTrash2, FiCopy, FiRefreshCw } from "react-icons/fi";
 
-const SpeechRecorder = () => {
+const SpeechRecorder = ({ addNotification, showToast }) => {
+  const complexPhrases = [
+    "The quick brown fox jumps over the lazy dog.",
+    "I went to the store to buy some bread, milk, and eggs.",
+    "The child took a cookie from the jar and gave it to the dog.",
+    "A sunny day is perfect for a walk in the park.",
+    "Please count backwards from one hundred by sevens.",
+    "I remember my first day of school very clearly.",
+    "The water in the river flows quickly down to the sea."
+  ];
+
   const [isRecording, setIsRecording] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [readingPrompt, setReadingPrompt] = useState("");
+  const [readingPrompt, setReadingPrompt] = useState(complexPhrases[0]);
   const [recordingStartTime, setRecordingStartTime] = useState(null);
   const [trueWpm, setTrueWpm] = useState(0);
-
-  const complexPhrases = [
-    "The bright morning sun shines over the quiet valley.",
-    "She quickly packed her bags and left for the airport.",
-    "A beautiful melody played softly in the background.",
-    "The tall ancient trees swayed gently in the wind.",
-    "He carefully read the instructions before starting the project.",
-    "The cheerful children played games in the large park.",
-    "A sudden rainstorm interrupted our peaceful afternoon picnic."
-  ];
+  const [patientName, setPatientName] = useState("");
+  const [patientAge, setPatientAge] = useState("");
+  const [patientGender, setPatientGender] = useState("");
 
   const generateNewPrompt = () => {
     let newPrompt;
@@ -31,8 +34,10 @@ const SpeechRecorder = () => {
   };
 
   useEffect(() => {
-    // Select a random tough sentence on load to test cognitive load
-    generateNewPrompt();
+    // Select a random tough sentence on load
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReadingPrompt(complexPhrases[Math.floor(Math.random() * complexPhrases.length)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const {
@@ -46,7 +51,42 @@ const SpeechRecorder = () => {
     setTrueWpm(0);
     setRecordingStartTime(Date.now());
     setIsRecording(true);
-    SpeechRecognition.startListening({ continuous: true, language: "en-US" });
+    SpeechRecognition.startListening({ continuous: true, interimResults: true, language: "en-US" });
+  };
+
+  const checkPromptMatch = (transcriptText, promptText) => {
+    const tWords = transcriptText.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(Boolean);
+    const pWords = promptText.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(Boolean);
+    
+    if (pWords.length === 0) return 1;
+    
+    // We only take the first N words from transcript
+    const tSlice = tWords.slice(0, pWords.length).join(" ");
+    const pStr = pWords.join(" ");
+    
+    if (tSlice.length === 0) return 0;
+
+    // Levenshtein distance
+    const costs = [];
+    for (let i = 0; i <= pStr.length; i++) {
+      let lastValue = i;
+      for (let j = 0; j <= tSlice.length; j++) {
+        if (i === 0) costs[j] = j;
+        else {
+          if (j > 0) {
+            let newValue = costs[j - 1];
+            if (pStr.charAt(i - 1) !== tSlice.charAt(j - 1)) {
+              newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+            }
+            costs[j - 1] = lastValue;
+            lastValue = newValue;
+          }
+        }
+      }
+      if (i > 0) costs[tSlice.length] = lastValue;
+    }
+    const dist = costs[tSlice.length];
+    return Math.max(0, (pStr.length - dist) / pStr.length);
   };
 
   const stopRecording = () => {
@@ -60,6 +100,28 @@ const SpeechRecorder = () => {
       if (durationSeconds > 0) {
         const wpm = Math.round((finalWordCount / durationSeconds) * 60);
         setTrueWpm(wpm);
+      }
+      
+      // Check reading accuracy
+      const similarity = checkPromptMatch(transcript, readingPrompt);
+      if (similarity < 0.95) {
+        // Show pop up message
+        if (showToast) showToast("You haven't spelt correctly. Please try again.", "warning");
+        if (addNotification) {
+          addNotification({
+            type: "warning",
+            title: "Reading Verification Failed",
+            message: `Reading accuracy was ${Math.round(similarity * 100)}%. Please read the prompt clearly.`,
+          });
+        }
+      } else {
+        if (addNotification) {
+          addNotification({
+            type: "success",
+            title: "Reading Verified",
+            message: "Prompt read correctly.",
+          });
+        }
       }
     }
   };
@@ -90,6 +152,38 @@ const SpeechRecorder = () => {
       <p className="section-subtitle">
         Speak clearly — our AI analyzes speech patterns for cognitive biomarkers
       </p>
+
+      {/* Patient Intake Form */}
+      <div style={{ marginBottom: "24px", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "16px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%", maxWidth: "250px" }}>
+          <label htmlFor="patient-name-input" style={{ fontSize: "0.75rem", color: "var(--primary)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "1px" }}>Name</label>
+          <input 
+            id="patient-name-input" type="text" value={patientName} onChange={(e) => setPatientName(e.target.value)}
+            placeholder="e.g. John Doe"
+            style={{ padding: "10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)", background: "rgba(0,0,0,0.2)", color: "var(--text-primary)", fontSize: "0.95rem", width: "100%" }}
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%", maxWidth: "100px" }}>
+          <label htmlFor="patient-age-input" style={{ fontSize: "0.75rem", color: "var(--primary)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "1px" }}>Age</label>
+          <input 
+            id="patient-age-input" type="number" value={patientAge} onChange={(e) => setPatientAge(e.target.value)}
+            placeholder="e.g. 68"
+            style={{ padding: "10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)", background: "rgba(0,0,0,0.2)", color: "var(--text-primary)", fontSize: "0.95rem", width: "100%" }}
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", width: "100%", maxWidth: "140px" }}>
+          <label htmlFor="patient-gender-input" style={{ fontSize: "0.75rem", color: "var(--primary)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "1px" }}>Gender</label>
+          <select 
+            id="patient-gender-input" value={patientGender} onChange={(e) => setPatientGender(e.target.value)}
+            style={{ padding: "10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-subtle)", background: "rgba(0,0,0,0.2)", color: "var(--text-primary)", fontSize: "0.95rem", width: "100%", outline: "none", cursor: "pointer", WebkitAppearance: "none", appearance: "none" }}
+          >
+            <option value="" disabled style={{ color: "#000" }}>Select...</option>
+            <option value="Male" style={{ color: "#000" }}>Male</option>
+            <option value="Female" style={{ color: "#000" }}>Female</option>
+            <option value="Other" style={{ color: "#000" }}>Other</option>
+          </select>
+        </div>
+      </div>
 
       {/* Cognitive Load Reading Test */}
       <div
@@ -185,12 +279,12 @@ const SpeechRecorder = () => {
               className="wave-bar"
               animate={
                 isRecording
-                  ? { height: [8, Math.random() * 44 + 10, 8] }
+                  ? { height: [8, 10 + ((i * 7) % 35), 8] }
                   : { height: 8 }
               }
               transition={{
                 repeat: Infinity,
-                duration: 0.45 + Math.random() * 0.3,
+                duration: 0.45 + (i % 5) * 0.1,
                 delay: i * 0.04,
                 ease: "easeInOut",
               }}

@@ -1,10 +1,13 @@
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FiZap, FiFileText, FiChevronRight, FiActivity, FiMic, FiBarChart2, FiClipboard, FiDownload } from "react-icons/fi";
+import { FiZap, FiFileText, FiChevronRight, FiActivity, FiMic, FiBarChart2, FiClipboard, FiDownload, FiX } from "react-icons/fi";
 import { GiDna2 } from "react-icons/gi";
 import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+
+// eslint-disable-next-line no-unused-vars
+const keepImports = [jsPDF, autoTable];
 
 import Navbar from "../components/Navbar";
 import SpeechRecorder from "../components/SpeechRecorder";
@@ -21,9 +24,69 @@ const howToSteps = [
   { icon: <FiDownload size={28} />, title: "4. Export Report", desc: "Generate and download a professional medical PDF report for clinical records and specialist referral.", color: "#CF8A40", bg: "rgba(207, 138, 64, 0.08)" },
 ];
 
+const Toast = ({ message, type, onClose }) => {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 50, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 20, scale: 0.9 }}
+      style={{
+        position: "fixed",
+        bottom: "40px",
+        right: "40px",
+        zIndex: 9999,
+        background: type === "warning" ? "rgba(230, 57, 70, 0.95)" : type === "success" ? "rgba(0, 192, 127, 0.95)" : "rgba(115, 199, 227, 0.95)",
+        color: "#fff",
+        padding: "16px 24px",
+        borderRadius: "var(--radius-md)",
+        boxShadow: "0 12px 40px rgba(0,0,0,0.3)",
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        border: `1px solid ${type === "warning" ? "#ff4d6d" : type === "success" ? "#00ffaa" : "#a0d8ef"}`,
+        backdropFilter: "blur(10px)"
+      }}
+    >
+      <span style={{ fontSize: "1.1rem" }}>{type === "warning" ? "⚠️" : type === "success" ? "✅" : "ℹ️"}</span>
+      <p style={{ margin: 0, fontSize: "0.95rem", fontWeight: "600", letterSpacing: "0.02em" }}>{message}</p>
+      <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#fff", cursor: "pointer", marginLeft: "12px", opacity: 0.8 }}><FiX /></button>
+    </motion.div>
+  );
+};
+
 const HomePage = ({ theme, setTheme, user, setUser }) => {
   const [loading, setLoading] = useState(false);
   const [prediction, setPrediction] = useState(null);
+
+  const [notifications, setNotifications] = useState([
+    {
+      id: 1,
+      type: "system",
+      title: "System Update",
+      message: "NeuroScan AI model has been updated to version 2.4. Prediction accuracy improved by 3%.",
+      time: "2 hours ago",
+      read: false
+    },
+    {
+      id: 2,
+      type: "report",
+      title: "Report Generated",
+      message: "Your latest analysis report for Patient ID #8892 is ready to download.",
+      time: "Yesterday",
+      read: false
+    }
+  ]);
+
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = "info") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const addNotification = (notif) => {
+    setNotifications(prev => [{...notif, id: Date.now() + Math.random(), time: "Just now", read: false}, ...prev]);
+  };
 
   const analyticsRef = useRef(null);
   const dashboardRef = useRef(null);
@@ -139,9 +202,11 @@ const HomePage = ({ theme, setTheme, user, setUser }) => {
       result = "Inconclusive (Malingering Flag)";
       confidence = 88 + (hash % 10);
       riskColor = "#9b5de5"; // Purple for anomaly
-    } else if (speechScore >= 75) {
+    } else if (speechScore >= 90) {
+      result = "No Dementia Detected"; confidence = 88 + (hash % 10); riskColor = "#00c07f";
+    } else if (speechScore >= 61) {
       result = "Low Dementia Risk"; confidence = 85 + (hash % 12); riskColor = "#73C7E3";
-    } else if (speechScore >= 50) {
+    } else if (speechScore >= 31) {
       result = "Moderate Dementia Risk"; confidence = 80 + (hash % 15); riskColor = "#CF8A40";
     } else {
       result = "High Dementia Risk"; confidence = 88 + (hash % 10); riskColor = "#e63946";
@@ -149,26 +214,56 @@ const HomePage = ({ theme, setTheme, user, setUser }) => {
 
     // Generate a deterministic Patient ID based on the text hash so it stays the same for the same text
     const patientHash = (hash * 13) % 9000 + 1000;
+    const nameInputEl = document.getElementById("patient-name-input");
+    const enteredName = nameInputEl ? nameInputEl.value.trim() : "";
+    const patientId = enteredName !== "" ? enteredName : "NS-" + patientHash;
+
+    const ageInputEl = document.getElementById("patient-age-input");
+    const patientAge = ageInputEl ? ageInputEl.value : "";
+
+    const genderInputEl = document.getElementById("patient-gender-input");
+    const patientGender = genderInputEl ? genderInputEl.value : "";
 
     return {
       result, confidence, speechScore, riskColor, authenticityScore, isFaking,
       biomarkers: { pauseFrequency, avgPauseDuration, speechRate, vocabularyRichness: +(vocabularyRichness).toFixed(1), sentenceCompleteness, pitchVariability, wordRecall, fluencyScore },
-      timestamp: new Date().toLocaleString(), patientId: "NS-" + patientHash,
+      timestamp: new Date().toLocaleString(), patientId: patientId, patientAge: patientAge, patientGender: patientGender
     };
   };
 
   const connectBackend = async () => {
     setLoading(true); setPrediction(null);
+    addNotification({ type: "system", title: "Analysis Started", message: "AI Speech model is analyzing the vocal biomarkers..." });
     try {
       const response = await axios.get("http://localhost:8080/api/predict");
       setTimeout(() => {
         const analysis = generateAnalysis();
-        setPrediction({ ...analysis, result: response.data.prediction || analysis.result, confidence: response.data.confidence || analysis.confidence, speechScore: response.data.speech_score || analysis.speechScore });
+        setPrediction({ 
+          ...analysis, 
+          result: response.data.prediction || analysis.result, 
+          confidence: response.data.confidence || analysis.confidence, 
+          speechScore: response.data.speech_score || analysis.speechScore,
+          speechAnalysisSummary: response.data.speechAnalysisSummary,
+          cognitiveIndicators: response.data.cognitiveIndicators,
+          linguisticAnalysis: response.data.linguisticAnalysis,
+          acousticAnalysis: response.data.acousticAnalysis,
+          recommendedNextStep: response.data.recommendedNextStep,
+          explainabilityReport: response.data.explainabilityReport,
+          biasFairnessCheck: response.data.biasFairnessCheck
+        });
         setLoading(false);
+        addNotification({ type: "success", title: "Analysis Complete", message: "Dementia detection scan completed successfully." });
+        showToast("Analysis Complete", "success");
       }, 3000);
-    } catch (error) {
+    // eslint-disable-next-line no-unused-vars
+    } catch (_err) {
       console.warn("Backend offline — running local AI simulation");
-      setTimeout(() => { setPrediction(generateAnalysis()); setLoading(false); }, 3000);
+      setTimeout(() => { 
+        setPrediction(generateAnalysis()); 
+        setLoading(false); 
+        addNotification({ type: "success", title: "Analysis Complete", message: "Dementia detection scan completed (Simulation mode)." });
+        showToast("Analysis Complete", "success");
+      }, 3000);
     }
   };
 
@@ -186,19 +281,25 @@ const HomePage = ({ theme, setTheme, user, setUser }) => {
       
       if (result.status === 'success' && result.download_url) {
         // Step 2: Trigger native GET request download
-        window.location.href = result.download_url;
+        window.location.assign(result.download_url);
+        addNotification({ type: "report", title: "PDF Exported", message: "Your diagnostic report has been downloaded successfully." });
+        showToast("PDF Exported Successfully", "success");
       } else {
         throw new Error("Failed to generate PDF on server.");
       }
     } catch (err) { 
       console.error(err); 
-      alert("PDF generation error: " + err.message + "\nMake sure the Python backend is running on port 5000!"); 
+      showToast("PDF generation error: " + err.message, "warning");
     }
   };
 
   return (
     <DashboardLayout theme={theme}>
-      <Navbar theme={theme} setTheme={setTheme} user={user} setUser={setUser} scrollToSection={scrollToSection} />
+      <Navbar theme={theme} setTheme={setTheme} user={user} setUser={setUser} scrollToSection={scrollToSection} notifications={notifications} setNotifications={setNotifications} addNotification={addNotification} showToast={showToast} />
+      
+      <AnimatePresence>
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      </AnimatePresence>
 
       <main className="main-content" style={{ padding: "90px 40px 80px", maxWidth: "1400px", margin: "0 auto" }}>
         {/* Hero Section */}
@@ -290,6 +391,51 @@ const HomePage = ({ theme, setTheme, user, setUser }) => {
                   </div>
                 ))}
               </div>
+
+              {/* Comprehensive AI Report Section */}
+              {prediction.explainabilityReport && (
+                <div style={{ marginTop: "16px", marginBottom: "28px" }}>
+                  <h3 style={{ fontSize: "1.05rem", color: "#73C7E3", marginBottom: "16px" }}>Comprehensive AI Analysis</h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px" }}>
+                    
+                    <div style={{ padding: "16px", background: "var(--bg-surface)", borderRadius: "var(--radius-md)", borderLeft: "4px solid #73C7E3" }}>
+                      <h4 style={{ fontSize: "0.9rem", color: "#fff", marginBottom: "8px" }}>Speech Analysis Summary</h4>
+                      <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", margin: 0, lineHeight: "1.5" }}>{prediction.speechAnalysisSummary}</p>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
+                      <div style={{ padding: "16px", background: "var(--bg-surface)", borderRadius: "var(--radius-md)" }}>
+                        <h4 style={{ fontSize: "0.9rem", color: "#CF8A40", marginBottom: "8px" }}>Cognitive Indicators</h4>
+                        <ul style={{ margin: 0, paddingLeft: "16px", color: "var(--text-secondary)", fontSize: "0.85rem", lineHeight: "1.5" }}>
+                          {prediction.cognitiveIndicators.map((ind, i) => <li key={i}>{ind}</li>)}
+                        </ul>
+                      </div>
+                      
+                      <div style={{ padding: "16px", background: "var(--bg-surface)", borderRadius: "var(--radius-md)" }}>
+                        <h4 style={{ fontSize: "0.9rem", color: "#5BB8D9", marginBottom: "8px" }}>Linguistic & Acoustic Analysis</h4>
+                        <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginBottom: "8px", lineHeight: "1.5" }}><strong>Linguistic:</strong> {prediction.linguisticAnalysis}</p>
+                        <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", margin: 0, lineHeight: "1.5" }}><strong>Acoustic:</strong> {prediction.acousticAnalysis}</p>
+                      </div>
+                    </div>
+
+                    <div style={{ padding: "16px", background: "rgba(115, 199, 227, 0.05)", borderRadius: "var(--radius-md)", border: "1px solid rgba(115, 199, 227, 0.2)" }}>
+                      <h4 style={{ fontSize: "0.9rem", color: "#fff", marginBottom: "8px" }}>AI Explainability Report</h4>
+                      <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", margin: 0, lineHeight: "1.5" }}>{prediction.explainabilityReport}</p>
+                    </div>
+
+                    <div style={{ padding: "16px", background: "rgba(0, 192, 127, 0.08)", borderRadius: "var(--radius-md)", borderLeft: "4px solid #00c07f" }}>
+                      <h4 style={{ fontSize: "0.9rem", color: "#00c07f", marginBottom: "8px" }}>Bias & Fairness Check</h4>
+                      <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", margin: 0, lineHeight: "1.5" }}>{prediction.biasFairnessCheck}</p>
+                    </div>
+
+                    <div style={{ padding: "16px", background: "rgba(207, 138, 64, 0.1)", borderRadius: "var(--radius-md)", borderLeft: "4px solid #CF8A40" }}>
+                      <h4 style={{ fontSize: "0.9rem", color: "#CF8A40", marginBottom: "8px" }}>Recommended Next Step</h4>
+                      <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", margin: 0, lineHeight: "1.5", fontWeight: "600" }}>{prediction.recommendedNextStep}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ padding: "16px", background: "rgba(115, 199, 227, 0.08)", borderLeft: "4px solid #73C7E3", borderRadius: "0 8px 8px 0", marginBottom: "24px" }}>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-primary)", margin: 0 }}>
                   <strong>Important:</strong> This AI screening does not replace a clinical diagnosis. Please consult a board-certified neurologist.
@@ -306,7 +452,9 @@ const HomePage = ({ theme, setTheme, user, setUser }) => {
         </AnimatePresence>
 
         <div className="divider" />
-        <SpeechRecorder />
+        <div id="speech-recorder-section">
+          <SpeechRecorder addNotification={addNotification} showToast={showToast} />
+        </div>
         <div className="divider" />
         <div ref={analyticsRef}><Analytics /></div>
         <div className="divider" />
